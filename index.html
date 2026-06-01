@@ -5,16 +5,153 @@
     <meta charset="utf-8">
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <style>
+/* ==================== LOADING SCREEN ==================== */
+      #custom-loading {
+        position: fixed;
+        top: 0; left: 0;
+        width: 100%; height: 100%;
+        background: linear-gradient(135deg, #0a0a1a 0%, #1a1a3e 50%, #0a1628 100%);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        z-index: 100;
+        transition: opacity 0.8s ease;
+      }
+
+      #custom-loading.fade-out {
+        opacity: 0;
+        pointer-events: none;
+      }
+
+      .loading-icon {
+        font-size: 56px;
+        margin-bottom: 20px;
+        animation: pulse 1.5s ease-in-out infinite;
+      }
+
+      @keyframes pulse {
+        0%, 100% { transform: scale(1); opacity: 1; }
+        50% { transform: scale(1.15); opacity: 0.8; }
+      }
+
+      .loading-title {
+        font-size: 36px;
+        font-weight: 900;
+        color: #00d4ff;
+        text-shadow: 0 0 20px rgba(0, 212, 255, 0.4), 0 4px 8px rgba(0,0,0,0.5);
+        margin-bottom: 8px;
+        letter-spacing: 4px;
+      }
+
+      .loading-subtitle {
+        font-size: 13px;
+        color: #6080a0;
+        margin-bottom: 35px;
+        letter-spacing: 1px;
+      }
+
+      .progress-container {
+        width: 380px;
+        margin-bottom: 12px;
+      }
+
+      .progress-bar-bg {
+        width: 100%;
+        height: 20px;
+        background: rgba(255,255,255,0.08);
+        border-radius: 10px;
+        overflow: hidden;
+        border: 1px solid rgba(0, 212, 255, 0.2);
+      }
+
+      .progress-bar-fill {
+        height: 100%;
+        width: 0%;
+        background: linear-gradient(90deg, #0066ff, #00d4ff, #0066ff);
+        background-size: 200% 100%;
+        border-radius: 10px;
+        transition: width 0.3s ease;
+        animation: shimmer 1.5s linear infinite;
+      }
+
+      @keyframes shimmer {
+        0% { background-position: 200% 0; }
+        100% { background-position: -200% 0; }
+      }
+
+      .progress-text {
+        color: #00d4ff;
+        font-size: 15px;
+        font-weight: bold;
+        text-align: center;
+        margin-top: 8px;
+      }
+
+      .loading-status {
+        color: #5a7a9a;
+        font-size: 12px;
+        margin-top: 4px;
+        text-align: center;
+        min-height: 18px;
+      }
+
+      .fun-message {
+        color: #8090b0;
+        font-size: 13px;
+        margin-top: 25px;
+        font-style: italic;
+        opacity: 0.7;
+        text-align: center;
+        min-height: 20px;
+        transition: opacity 0.3s ease;
+      }
+    
+</style>
   </head>
   <body style="margin:0;padding:0" class="noselect">
-    <div id="loading-text" style="color: black; font-size: 48px; font-family: cursive; text-align: center; margin-top: 20px;">LOADING...</div>
+<div id="custom-loading">
+  <div class="loading-title">LOADING</div>
+  <div class="loading-subtitle">Preparing game assets...</div>
+
+  <div class="progress-container">
+    <div class="progress-bar-bg">
+      <div class="progress-bar-fill" id="merge-progress-bar"></div>
+    </div>
+
+    <div class="progress-text" id="merge-progress-text">0%</div>
+    <div class="loading-status" id="merge-status">Initializing...</div>
+  </div>
+
+  <div class="fun-message" id="fun-message"></div>
+</div>
     <canvas id="unity-canvas"
       style="position:fixed;top:0;left:0;width:100%;height:100%;outline:none"></canvas>
 
     <script>
     const SPLIT_MAP = {"CrazyGames.wasm": null, "CrazyGames.data": null};
     </script>
+<script>
+const funMessages = [
+  "Loading textures... 🎨",
+  "Building the world... 🌍",
+  "Placing objects... 📦",
+  "Loading weapons... 🔫",
+  "Preparing battle royale... 🏆",
+  "Almost there... 🚀"
+];
 
+let msgIndex = 0;
+
+setInterval(() => {
+  const el = document.getElementById("fun-message");
+  if (el) {
+    el.textContent = funMessages[msgIndex % funMessages.length];
+    msgIndex++;
+  }
+}, 3000);
+</script>
     <script>
     async function mergeParts(baseUrl) {
       const parts = [];
@@ -48,18 +185,20 @@
       const total = files.length;
       let done = 0;
 
-      const loadingText = document.getElementById("loading-text");
+const progressBar = document.getElementById("merge-progress-bar");
+const progressText = document.getElementById("merge-progress-text");
+const statusText = document.getElementById("merge-status");
 
       for (const [file, _] of files) {
         const merged = await mergeParts("Build/" + file);
         map[file] = merged;
         done++;
-        const percent = Math.floor((done / total) * 100);
-        loadingText.innerText = `LOADING... ${percent}%`;
+        const percent = Math.round((done / total) * 100);
+progressBar.style.width = percent + "%";
+progressText.textContent = percent + "%";
+statusText.textContent = `Merging files... ${percent}%`;
         console.log("Premerged:", file, "→", merged);
       }
-
-      loadingText.style.display = "none";
 
       return map;
     }
@@ -110,9 +249,27 @@
       const script = document.createElement("script");
       script.src = loaderUrl;
       script.onload = () => {
-        createUnityInstance(canvas, config, (progress) => {}).then((unityInstance) => {
-          window.gameInstance = unityInstance;
-        }).catch((message) => alert(message));
+        createUnityInstance(canvas, config, (progress) => {
+  const pct = Math.round(progress * 100);
+
+  document.getElementById("merge-progress-bar").style.width = pct + "%";
+  document.getElementById("merge-progress-text").textContent = pct + "%";
+  document.getElementById("merge-status").textContent =
+    "Loading game engine... " + pct + "%";
+}).then((unityInstance) => {
+    window.gameInstance = unityInstance;
+
+    document.getElementById("custom-loading")
+      .classList.add("fade-out");
+
+    setTimeout(() => {
+      document.getElementById("custom-loading").style.display = "none";
+    }, 800);
+
+}).catch((message) => {
+    console.error(message);
+    alert(message);
+});
       };
       document.body.appendChild(script);
     })();
